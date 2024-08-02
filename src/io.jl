@@ -1,6 +1,6 @@
 using Plots
 
-function readPartCoor(PartFile)
+function readPartCoor(PartFile; factor=1.0)
 	# open the .txt file and read in all datalines
 	DataFile = open(PartFile, "r")
 	datalines = readlines(DataFile)
@@ -17,19 +17,19 @@ function readPartCoor(PartFile)
 
 	end
     
-	return Particles
+	return Particles .* factor
 end
 
-function plotRDF(r, Gr, SimuName)
+function plotRDF(r, Gr, SimuName, FilePath)
     plot(r, Gr, color="green", label="", xlabel="r", ylabel="g(r)")
     plot!(r, ones(length(r)), color="black", linestyle=:dash, linewidth=1, label="")
-    savefig(SimuName * "_Gr.pdf")
+    savefig(FilePath * SimuName * "_Gr.pdf")
     return true
 end
 
 function saveRDFdata(rList, Gr, DeltaR, SimuName, FilePath)
 	# create a new file for the raw data
-	DataFile = open(SimuName * "_RDF.txt", "w")
+	DataFile = open(FilePath * SimuName * "_RDF.txt", "w")
 
 	# write the header
 	write(DataFile, "Radial Distribution Function for Experiment: ", SimuName, "\n")
@@ -41,10 +41,10 @@ function saveRDFdata(rList, Gr, DeltaR, SimuName, FilePath)
 	# write the data
 	for k in eachindex(rList)
 	    write(DataFile, string(rList[k]), "\t", string(Gr[k]), "\n")
-
 	end
 
 	close(DataFile)
 
 	return true
 end
+

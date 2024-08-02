@@ -1,4 +1,4 @@
-module ElectronPhonon
+module Potential
 
 using LinearAlgebra
 using ProgressMeter
@@ -10,7 +10,7 @@ include("io.jl")
 export rotate_particles
 include("coordinates.jl")
 
-export RDF_AnalyticNorm
+export RDF_AnalyticNorm, ProcessPartCoor
 include("rdf.jl")
 
 end

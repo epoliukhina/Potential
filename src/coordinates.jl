@@ -1,12 +1,12 @@
 #Functions for rotation and processing of coordinates
 
 # import Pkg;Pkg.add("Plotly")
-particle_size = parse(Float64, size_str)
-factor = parse(Float64, factor_str) 
-data_matrix = factor .* readdlm(ParticleFileRaw)
-x,y,z = data_matrix[:,1],data_matrix[:,2],data_matrix[:,3]
-plotlyjs() 
-Plots.scatter3d(x,y,z, markersize = particle_size/4)
+# particle_size = parse(Float64, size_str)
+# factor = parse(Float64, factor_str) 
+# data_matrix = factor .* readdlm(ParticleFileRaw)
+# x,y,z = data_matrix[:,1],data_matrix[:,2],data_matrix[:,3]
+# plotlyjs() 
+# Plots.scatter3d(x,y,z, markersize = particle_size/4)
 
 
 function linear_fit(points)
@@ -20,7 +20,9 @@ function linear_fit(points)
     return m, c
 end
 
-function rotate_particles(x,y,z)
+function rotate_particles(particles)
+    x,y,z = particles[:,1],particles[:,2],particles[:,3]
+
     points_3d = hcat(x, y, z)
     points = hcat(x, z)
     kx, bx = linear_fit(points)
@@ -50,10 +52,10 @@ function rotate_particles(x,y,z)
 
     points_3d_new = (U_x * U_y * points_3d')'
 
-    x_new = points_3d_new[:, 1]
-    y_new = points_3d_new[:, 2]
-    z_new = points_3d_new[:, 3]
+    # x_new = points_3d_new[:, 1]
+    # y_new = points_3d_new[:, 2]
+    # z_new = points_3d_new[:, 3]
 
-    return [x_new, y_new, z_new]
+    return points_3d_new
 end
 
