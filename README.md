@@ -1,5 +1,3 @@
-# RDF.jl   
-   
-Compute Radial distribution function.    
+# Potentials
 
-Rewriten implementation of ["Computing the 3D Radial Distribution Function from Particle Positions: An Advanced Analytic Approach"](https://doi.org/10.1021/acs.analchem.8b03157) in Julia.
+<!-- [![Build Status](https://github.com/Koulb/Potentials.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Koulb/Potentials.jl/actions/workflows/CI.yml?query=branch%3Amain) -->

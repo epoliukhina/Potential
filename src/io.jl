@@ -1,29 +1,5 @@
 using Plots
 
-include("routines.jl")
-
-"""
-This script calculates and plots g(r) using the analytic
-normalization procedure
-"""
-
-#DASHBOARD
-
-RMax = 50 # maximal radial distance
-DeltaR = 0.3 # bin width
-NBins = 100 # number of equally spaced bins
-
-InDir = "raw_data/"
-OutDir = "/Users/ekaterina/git/RDF.jl/Ferritin_PBS_30mgml_position1"
-if !isdir(OutDir)
-    mkdir(OutDir)
-end
-OutDir = "Ferritin_PBS_30mgml_position1/"
-InitailData = InDir * "Ferritin_PBS_30mgml_position1.txt"
-ParticleFile = OutDir * "Ferritin_PBS_30mgml_position1.txt"
-
-SimuName = ParticleFile[1:end-4]
-
 function readPartCoor(PartFile)
 	# open the .txt file and read in all datalines
 	DataFile = open(PartFile, "r")
@@ -72,39 +48,3 @@ function saveRDFdata(rList, Gr, DeltaR, SimuName, FilePath)
 
 	return true
 end
-
-function ProcessPartCoor(PartFile, rList, DeltaR, SimuName)
-	println("Current FilePath: ", PartFile)
-
-	Particles = readPartCoor(PartFile)
-
-	# calculate the RDF
-	Gr = RDF_AnalyticNorm(Particles, rList, DeltaR)
-
-	# save the RDF data to a file
-	saveRDFdata(rList, Gr, DeltaR, SimuName, PartFile)
-
-	# plot RDF
-	plotRDF(rList, Gr, SimuName)
-
-	return true
-end
-
-# Perform rotation of data 
-println("Performing rotation of data...")
-args = InitailData * " " * ParticleFile
-run(`python rotate_axes.py $args`)
-println("Rotation complete")
-
-#create the list with radial distances
-rList = range(0, stop=RMax, length=NBins)
-
-println("Computing RDF:")
-ProcessPartCoor(ParticleFile, rList, DeltaR, SimuName)
-
-println("Program Finished")
-
-
-
-
-

@@ -1,7 +1,6 @@
 using LinearAlgebra
 using ProgressMeter
 
-
 """
 This function calculates the pair correlation function g(2)(r)
 for a dense set of particles in a rectangular box. The particle
