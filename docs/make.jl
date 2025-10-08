@@ -7,7 +7,8 @@ clean=true,
 modules=[Potential],
 checkdocs=:exports,
 pages = [
-    "Home" => "index.md"
+    "Home" => "index.md",
+    "Theory" => "theory.md"
     ]
 )
 
