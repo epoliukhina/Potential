@@ -131,11 +131,18 @@ md"""
 # cryo-POT: RDF, PMF, G₂₂, S(q)
 
 ## 1) Load 3D coordinates
-Input file (txt/tsv/csv): $(@bind initial_data_raw FilePicker())
+Input file (txt/tsv/csv): $(@bind uploaded_raw FilePicker())
 """
 
 # ╔═╡ 13cc1e0c-07f9-4d73-97a3-8cfcfa7d902a
 begin
+    selected_str = if uploaded_raw === nothing
+        ".data/BSA_20mgmL_Position_1_2.txt"
+    else
+        # FilePicker returns a Dict-like object with "name"
+        get(uploaded_raw, "name", "nothing")
+    end
+
     PlutoUI.HTML("""
     <div style="margin-top: 0.35rem;">
       <b>Selected file:</b>
@@ -144,11 +151,12 @@ begin
         word-break: break-all;
         white-space: normal;
         line-height: 1.25;">
-        $(get(initial_data_raw, "name", ""))
+        $(selected_str)
       </div>
     </div>
     """)
 end
+
 
 # ╔═╡ bff7c13d-c197-4a0a-88d7-4d174d2c5f6c
 md"""
@@ -157,6 +165,18 @@ Output directory (base): $(@bind outdir_base_raw TextField((80, 1), default=join
 
 # ╔═╡ 2cf2a7c5-0b7c-40df-a1f5-8d2cbd0ddc8d
 begin
+   default_path = joinpath(@__DIR__, "data", "BSA_20mgmL_Position_1_2.txt")
+
+    initial_data_raw = if uploaded_raw === nothing
+        Dict(
+            "name" => basename(default_path),
+            "data" => read(default_path),  # Vector{UInt8}
+            "type" => "text/plain",
+        )
+    else
+        uploaded_raw
+    end
+	
     outdir = joinpath(outdir_base_raw, splitext(initial_data_raw["name"])[1])
     mkpath(outdir)
 
