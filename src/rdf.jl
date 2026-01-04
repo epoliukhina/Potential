@@ -1,423 +1,357 @@
-using LinearAlgebra
-using ProgressMeter
+# --- Geometry helpers (same math, with Julia-style docstrings) ---
 
 """
-This function calculates the pair correlation function g(2)(r)
-for a dense set of particles in a rectangular box. The particle
-coordinates are supplied as [[x, y, z],...] lists.
-All particles are used as central particles.
-The spherical shell might extend beyond the known region.
-An empty surrounding is assumed.
+    sphere_cut_volume(Rs, A, B)
+
+Volume of the wedge left when two perpendicular planes at distances A and B
+intersect a sphere of radius Rs (used for box/sphere intersection).
 """
-
-function SphereCutVol(Rs::Float64, A::Float64, B::Float64)
-    """
-    Computes the volume of the wedge left when two planes
-    at positions A and B intersect a sphere of radius Rs.
-
-    Parameters
-    ----------
-    Rs: float, positive
-        Sphere radius
-    A, B: float, positive
-        Distance of each box face from the origin
-
-    Returns
-    -------
-    Vcut: float, positive
-        Volume of the spherical cut
-    """
+function sphere_cut_volume(Rs::Float64, A::Float64, B::Float64)
     Root = sqrt(Rs^2 - A^2 - B^2)
-    Vcut = 1/6 * Rs^3 * (pi - 2 * atan(A * B / (Rs * Root)))
-    Vcut += 1/2 * (atan(A / Root) - pi / 2) * (Rs^2 * B - 1/3 * B^3)
-    Vcut += 1/2 * (atan(B / Root) - pi / 2) * (Rs^2 * A - 1/3 * A^3)
-    Vcut += 1/3 * A * B * Root
+    Vcut = (1/6) * Rs^3 * (pi - 2 * atan(A * B / (Rs * Root)))
+    Vcut += (1/2) * (atan(A / Root) - pi / 2) * (Rs^2 * B - (1/3) * B^3)
+    Vcut += (1/2) * (atan(B / Root) - pi / 2) * (Rs^2 * A - (1/3) * A^3)
+    Vcut += (1/3) * A * B * Root
     return Vcut
 end
 
+"""
+    octant_volume(Rs, xb, yb, zb)
 
-function OctVolume(Rs::Float64, xb::Float64, yb::Float64, zb::Float64)
-    """
-    Compute the intersection volume between a sphere octant
-    and a box corner.
-
-    Parameters
-    ----------
-    Rs: float, positive
-        Sphere radius
-    xb, yb, zb: float, positive
-        Distance of the box faces from the origin
-
-    Returns
-    -------
-    VOctant: float, positive
-        Intersection volume between the octant
-        and the box corner
-    """
-
-    # if all boundaries are fully in the octant
+Intersection volume between a sphere octant and a box corner in the first octant.
+"""
+function octant_volume(Rs::Float64, xb::Float64, yb::Float64, zb::Float64)
     if xb^2 + yb^2 + zb^2 < Rs^2
         return xb * yb * zb
     end
 
-    # if no boundary intersects we start with
-    VOctant = 1/8 * 4/3 * pi * Rs^3
+    V = (1/8) * (4/3) * pi * Rs^3
 
-    # remove the spherical caps
-    for B in [xb, yb, zb]
+    for B in (xb, yb, zb)
         if B < Rs
-            VOctant -= pi/4 * (2/3 * Rs^3 - B * Rs^2 + 1/3 * B^3)
+            V -= (pi/4) * ((2/3) * Rs^3 - B * Rs^2 + (1/3) * B^3)
         end
     end
 
-    # add the intersections of the caps
-    for (a, b) in [(xb, yb), (xb, zb), (yb, zb)]
+    for (a, b) in ((xb, yb), (xb, zb), (yb, zb))
         if a^2 + b^2 < Rs^2
-            VOctant += SphereCutVol(Rs, a, b)
+            V += sphere_cut_volume(Rs, a, b)
         end
     end
 
-    return VOctant
+    return V
 end
 
+"""
+    sphere_volume(Rs, bounds)
 
-function SphereVolume(Rs::Float64, BoxBounds::Vector{Float64})
-    """
-    Computes the intersection volume of a sphere with a box.
-
-    Parameters
-    ----------
-    Rs: float, positive
-        Sphere radius
-    BoxBounds: vector of 6 positive floats
-        Distances of the box faces from the origin
-
-    Returns
-    -------
-    VSphere: float, positive or zero
-        Intersection volume of a sphere with a box
-    """
-
-    (Xmin, Xmax, Ymin, Ymax, Zmin, Zmax) = BoxBounds
-
-    VSphere = 0
-    for xb in [Xmin, Xmax]
-        for yb in [Ymin, Ymax]
-            for zb in [Zmin, Zmax]
-                # abs() mirrors the boundaries into the first octant
-                VSphere += OctVolume(Rs, abs(xb), abs(yb), abs(zb))
-            end
-        end
+Intersection volume of a sphere (centered at origin) with a rectangular box.
+`bounds = [Xmin, Xmax, Ymin, Ymax, Zmin, Zmax]` (distances from origin, can be ±).
+"""
+function sphere_volume(Rs::Float64, bounds::Vector{Float64})
+    Xmin, Xmax, Ymin, Ymax, Zmin, Zmax = bounds
+    V = 0.0
+    for xb in (Xmin, Xmax), yb in (Ymin, Ymax), zb in (Zmin, Zmax)
+        V += octant_volume(Rs, abs(xb), abs(yb), abs(zb))
     end
-
-    return VSphere
+    return V
 end
 
+"""
+    shell_volume(Rmin, Rmax, bounds)
 
-function ShellVolume(Rmin::Float64, Rmax::Float64, BoxBounds::Vector{Float64})
-    """
-    Compute the intersection volume of a spherical shell and a box.
-
-    Parameters
-    ----------
-    Rmin, Rmax: float, positive
-        Inner and outer radius of the spherical shell
-    BoxBounds: vector of 6 positive floats
-        Distances of the box faces from the origin
-
-    Returns
-    -------
-    Volume: float, positive or zero
-        Intersection volume of a spherical shell and a box
-    """
-
-    # check for negative Rmin values
-    Rmin = max(Rmin, 0)
-    InnerShell = SphereVolume(Rmin, BoxBounds)
-    OuterShell = SphereVolume(Rmax, BoxBounds)
-    Volume = OuterShell - InnerShell
-
-    return Volume
+Intersection volume of a spherical shell with a box.
+"""
+function shell_volume(Rmin::Float64, Rmax::Float64, bounds::Vector{Float64})
+    Rmin = max(Rmin, 0.0)
+    return sphere_volume(Rmax, bounds) - sphere_volume(Rmin, bounds)
 end
 
-function RDF_AnalyticNorm(Particles::Matrix{Float64}, r, dr)
-    """
-    Computes g(r) from the particle set assuming that 
-    the particles are bound by a rectangular box. The
-    intersection volume between the radial bins and the 
-    box are used to normalize g(r) correctly.
+# --- RDF core ---
 
-    Parameters
-    ----------
-    Particles: array of Float64
-        Array with the individual particle coordinates
-    r: array of Float64
-        Center positions of the radial bins
-    dr: Float64
-        Width / thickness of each radial bin
+# Find all bin indices k such that abs(r[k]-d) <= dr/2 (exactly your original rule).
+@inline function _bin_range(r::AbstractVector{<:Real}, d::Float64, dr::Float64)
+    lo = searchsortedfirst(r, d - dr/2)
+    hi = searchsortedlast(r,  d + dr/2)
+    return lo, hi
+end
 
-    Returns
-    -------
-    Global_Gr: array of Float64
-        g(r) values at the corresponding bin positions
-    """
+"""
+    rdf_analytic_norm(particles, r, dr; threaded=true, show_progress=false)
 
-    # Gr averaged over all particles
-    Global_Gr = zeros(length(r))
+Compute g(r) with analytic normalization using the intersection volume between spherical shells and the
+tight bounding box of the particle set.
+"""
+function rdf_analytic_norm(particles::AbstractMatrix{<:Real}, r, dr::Real;
+                           threaded::Bool=true, show_progress::Bool=false)
 
-    # Keep track of the usefull shell volumes
-    NonEmptyShells = zeros(length(r))
+    size(particles, 2) == 3 || error("rdf_analytic_norm expects an N×3 matrix")
+    dr = Float64(dr)
 
-    # maximal radial distance
-    MaxDist = r[end] + dr / 2
+    nbins = length(r)
+    r = collect(Float64, r)
 
-    # Box boundaries, could be supplied to the function
-    XList = Particles[:,1]
-    YList = Particles[:,2]
-    ZList = Particles[:,3]
+    x = Float64.(view(particles, :, 1))
+    y = Float64.(view(particles, :, 2))
+    z = Float64.(view(particles, :, 3))
 
-    # tight box around the particles
-    BoxBounds = [minimum(XList), maximum(XList),
-                 minimum(YList), maximum(YList),
-                 minimum(ZList), maximum(ZList)]
+    bounds = [minimum(x), maximum(x),
+              minimum(y), maximum(y),
+              minimum(z), maximum(z)]
 
-    # box size
-    Lx = BoxBounds[2] - BoxBounds[1]
-    Ly = BoxBounds[4] - BoxBounds[3]
-    Lz = BoxBounds[6] - BoxBounds[5]
+    Lx = bounds[2] - bounds[1]
+    Ly = bounds[4] - bounds[3]
+    Lz = bounds[6] - bounds[5]
+    mean_density = length(x) / (Lx * Ly * Lz)
 
-    println("Lx = $Lx")
-    println("Ly = $Ly")
-    println("Lz = $Lz")
+    n = length(x)
+    nt = threaded ? Threads.nthreads() : 1
+    gr_threads = [zeros(Float64, nbins) for _ in 1:nt]
+    shells_threads = [zeros(Float64, nbins) for _ in 1:nt]
 
-    MeanDensity = length(Particles[:,1]) / (Lx * Ly * Lz)
+    # ProgressMeter is not thread-safe; only show in single-thread mode.
+    p = (show_progress && !threaded) ? Progress(n, dt=1.0) : nothing
 
-    # use every particle as the center once
-    p = Progress(length(Particles[:,1]), dt=1.0)
-    # @showprogress 1 "Computing RDF..."
-    Threads.@threads for CentralP in 1:length(Particles[:,1])
+    work = 1:n
+    if threaded && Threads.nthreads() > 1
+        Threads.@threads for central in work
+            tid = Threads.threadid()
+            local_gr = zeros(Float64, nbins)
+            local_shells = zeros(Float64, nbins)
 
-        # local Gr around the current particle
-        Local_Gr = zeros(length(r))
-        Local_NonEmptyShells = zeros(length(r))
+            for neigh in 1:n
+                if neigh == central
+                    continue
+                end
+                dx = x[central] - x[neigh]
+                dy = y[central] - y[neigh]
+                dz = z[central] - z[neigh]
+                d = sqrt(dx*dx + dy*dy + dz*dz)
 
-        # look at every other particle at most MaxDist away:
-        for Neighbour in 1:length(Particles[:,1])
-
-            if CentralP != Neighbour
-
-                # calc the distance to the neighbour
-                dx = Particles[CentralP,1] - Particles[Neighbour,1]
-                dy = Particles[CentralP,2] - Particles[Neighbour,2]
-                dz = Particles[CentralP,3] - Particles[Neighbour,3]
-
-                d = sqrt(dx^2 + dy^2 + dz^2)
-
-                # what bins is the particle in?
-                IdxList = [k for k in 1:length(r) if abs(r[k] - d) <= dr / 2]
-
-                # add one to every bin the particle is in
-                for Pos in IdxList
-                    # count the particle
-                    Local_Gr[Pos] += 1
+                lo, hi = _bin_range(r, d, dr)
+                @inbounds for k in lo:hi
+                    local_gr[k] += 1.0
                 end
             end
-        end
 
-        # shift the center of box cosy
-        LocalBox = [BoxBounds[1] - Particles[CentralP,1],
-                    BoxBounds[2] - Particles[CentralP,1],
-                    BoxBounds[3] - Particles[CentralP,2],
-                    BoxBounds[4] - Particles[CentralP,2],
-                    BoxBounds[5] - Particles[CentralP,3],
-                    BoxBounds[6] - Particles[CentralP,3]]
+            local_box = [bounds[1] - x[central], bounds[2] - x[central],
+                         bounds[3] - y[central], bounds[4] - y[central],
+                         bounds[5] - z[central], bounds[6] - z[central]]
 
-        # normalize with the shell volume
-        for RIdx in 1:length(r)
-            SVolume = ShellVolume(r[RIdx] - dr / 2, r[RIdx] + dr / 2, LocalBox)
-            # check for safety
-            if SVolume > 0.0
-                Local_Gr[RIdx] /= SVolume
-                Local_NonEmptyShells[RIdx] += 1
-            end
-        end
-
-        # normalize by the mean particle density
-        Local_Gr .= Local_Gr / MeanDensity
-
-        # save in the global g(r) for the average over particles
-        Threads.@sync begin
-            Threads.@threads for i in eachindex(Global_Gr)
-                Global_Gr[i] += Local_Gr[i]
-                NonEmptyShells[i] += Local_NonEmptyShells[i]
-            end
-        end
-
-        # println("Finished Particle $CentralP of $(length(Particles[:,1]))")
-        next!(p)
-    end
-    
-    finish!(p)
-
-    # final normalization considering the non empty shell volumes
-    for k = 1:length(Global_Gr)
-        if NonEmptyShells[k] != 0
-            Global_Gr[k] /= NonEmptyShells[k]
-        else
-            println("All Shells at R = ", r[k], " are Empty!")
-        end
-    end    
-        
-    return  Global_Gr   
-end
-
-function RDF_AnalyticNorm(Particles1::Matrix{Float64},Particles2::Matrix{Float64}, r, dr)
-    """
-    Computes g(r) from the particle set assuming that 
-    the particles are bound by a rectangular box. The
-    intersection volume between the radial bins and the 
-    box are used to normalize g(r) correctly.
-
-    Parameters
-    ----------
-    Particles: array of Float64
-        Array with the individual particle coordinates
-    r: array of Float64
-        Center positions of the radial bins
-    dr: Float64
-        Width / thickness of each radial bin
-
-    Returns
-    -------
-    Global_Gr: array of Float64
-        g(r) values at the corresponding bin positions
-    """
-
-    # Gr averaged over all particles
-    Global_Gr = zeros(length(r))
-
-    # Keep track of the usefull shell volumes
-    NonEmptyShells = zeros(length(r))
-
-    # maximal radial distance
-    MaxDist = r[end] + dr / 2
-
-    # Box boundaries, could be supplied to the function
-    XList1 = Particles1[:,1]
-    YList1 = Particles1[:,2]
-    ZList1 = Particles1[:,3]
-
-    XList2 = Particles2[:,1]
-    YList2 = Particles2[:,2]
-    ZList2 = Particles2[:,3]
-
-
-    # tight box around the particles
-    BoxBounds = [min(minimum(XList1),minimum(XList2)), max(maximum(XList1),maximum(XList2)),
-                 min(minimum(YList1),minimum(YList2)), max(maximum(YList1),maximum(YList2)),
-                 min(minimum(ZList1),minimum(ZList2)), max(maximum(ZList1),maximum(ZList2))]
-
-    # box size
-    Lx = BoxBounds[2] - BoxBounds[1]
-    Ly = BoxBounds[4] - BoxBounds[3]
-    Lz = BoxBounds[6] - BoxBounds[5]
-
-    println("Lx = $Lx")
-    println("Ly = $Ly")
-    println("Lz = $Lz")
-
-    MeanDensity = length(Particles2[:,1]) / (Lx * Ly * Lz)
-
-    # use every particle as the center once
-    p = Progress(length(Particles1[:,1]), dt=1.0)
-    # @showprogress 1 "Computing RDF..."
-    Threads.@threads for CentralP in 1:length(Particles1[:,1])
-
-        # local Gr around the current particle
-        Local_Gr = zeros(length(r))
-        Local_NonEmptyShells = zeros(length(r))
-
-        # look at every other particle at most MaxDist away:
-        for Neighbour in 1:length(Particles2[:,1])
-
-            #if CentralP != Neighbour
-
-                # calc the distance to the neighbour
-                dx = Particles1[CentralP,1] - Particles2[Neighbour,1]
-                dy = Particles1[CentralP,2] - Particles2[Neighbour,2]
-                dz = Particles1[CentralP,3] - Particles2[Neighbour,3]
-
-                d = sqrt(dx^2 + dy^2 + dz^2)
-
-                # what bins is the particle in?
-                IdxList = [k for k in 1:length(r) if abs(r[k] - d) <= dr / 2]
-
-                # add one to every bin the particle is in
-                for Pos in IdxList
-                    # count the particle
-                    Local_Gr[Pos] += 1
+            @inbounds for k in 1:nbins
+                sv = shell_volume(r[k] - dr/2, r[k] + dr/2, local_box)
+                if sv > 0.0
+                    local_gr[k] /= sv
+                    local_shells[k] += 1.0
                 end
-           # end
-        end
+            end
 
-        # shift the center of box cosy
-        LocalBox = [BoxBounds[1] - Particles1[CentralP,1],
-                    BoxBounds[2] - Particles1[CentralP,1],
-                    BoxBounds[3] - Particles1[CentralP,2],
-                    BoxBounds[4] - Particles1[CentralP,2],
-                    BoxBounds[5] - Particles1[CentralP,3],
-                    BoxBounds[6] - Particles1[CentralP,3]]
+            local_gr ./= mean_density
 
-        # normalize with the shell volume
-        for RIdx in 1:length(r)
-            SVolume = ShellVolume(r[RIdx] - dr / 2, r[RIdx] + dr / 2, LocalBox)
-            # check for safety
-            if SVolume > 0.0
-                Local_Gr[RIdx] /= SVolume
-                Local_NonEmptyShells[RIdx] += 1
+            @inbounds for k in 1:nbins
+                gr_threads[tid][k] += local_gr[k]
+                shells_threads[tid][k] += local_shells[k]
             end
         end
+    else
+        for central in work
+            local_gr = zeros(Float64, nbins)
+            local_shells = zeros(Float64, nbins)
 
-        # normalize by the mean particle density
-        Local_Gr .= Local_Gr / MeanDensity
+            for neigh in 1:n
+                if neigh == central
+                    continue
+                end
+                dx = x[central] - x[neigh]
+                dy = y[central] - y[neigh]
+                dz = z[central] - z[neigh]
+                d = sqrt(dx*dx + dy*dy + dz*dz)
 
-        # save in the global g(r) for the average over particles
-        Threads.@sync begin
-            Threads.@threads for i in eachindex(Global_Gr)
-                Global_Gr[i] += Local_Gr[i]
-                NonEmptyShells[i] += Local_NonEmptyShells[i]
+                lo, hi = _bin_range(r, d, dr)
+                @inbounds for k in lo:hi
+                    local_gr[k] += 1.0
+                end
             end
-        end
 
-        # println("Finished Particle $CentralP of $(length(Particles[:,1]))")
-        next!(p)
+            local_box = [bounds[1] - x[central], bounds[2] - x[central],
+                         bounds[3] - y[central], bounds[4] - y[central],
+                         bounds[5] - z[central], bounds[6] - z[central]]
+
+            @inbounds for k in 1:nbins
+                sv = shell_volume(r[k] - dr/2, r[k] + dr/2, local_box)
+                if sv > 0.0
+                    local_gr[k] /= sv
+                    local_shells[k] += 1.0
+                end
+            end
+
+            local_gr ./= mean_density
+
+            @inbounds for k in 1:nbins
+                gr_threads[1][k] += local_gr[k]
+                shells_threads[1][k] += local_shells[k]
+            end
+
+            p === nothing || next!(p)
+        end
+        p === nothing || finish!(p)
     end
-    
-    finish!(p)
 
-    # final normalization considering the non empty shell volumes
-    for k = 1:length(Global_Gr)
-        if NonEmptyShells[k] != 0
-            Global_Gr[k] /= NonEmptyShells[k]
-        else
-            println("All Shells at R = ", r[k], " are Empty!")
+    global_gr = zeros(Float64, nbins)
+    nonempty = zeros(Float64, nbins)
+    @inbounds for t in 1:nt, k in 1:nbins
+        global_gr[k] += gr_threads[t][k]
+        nonempty[k] += shells_threads[t][k]
+    end
+
+    @inbounds for k in 1:nbins
+        if nonempty[k] > 0
+            global_gr[k] /= nonempty[k]
         end
-    end    
-        
-    return  Global_Gr   
-end             
+    end
 
-
-function ProcessPartCoor(Particles, rList, DeltaR, PartFile, SimuName)
-    # calculate the RDF
-    Gr = RDF_AnalyticNorm(Particles, rList, DeltaR)
-
-    # save the RDF data to a file
-    saveRDFdata(rList, Gr, DeltaR, SimuName, PartFile)
-
-    # plot RDF
-    plotRDF(rList, Gr, SimuName, PartFile)
-
-    return true
+    return global_gr
 end
 
+"""
+    rdf_analytic_norm(particles1, particles2, r, dr; threaded=true, show_progress=false)
+
+Cross-RDF: particles1 as centers, particles2 as neighbours. Normalization uses density of particles2.
+"""
+function rdf_analytic_norm(p1::AbstractMatrix{<:Real}, p2::AbstractMatrix{<:Real}, r, dr::Real;
+                           threaded::Bool=true, show_progress::Bool=false)
+
+    size(p1, 2) == 3 || error("rdf_analytic_norm expects an N×3 matrix for p1")
+    size(p2, 2) == 3 || error("rdf_analytic_norm expects an N×3 matrix for p2")
+    dr = Float64(dr)
+
+    nbins = length(r)
+    r = collect(Float64, r)
+
+    x1 = Float64.(view(p1, :, 1)); y1 = Float64.(view(p1, :, 2)); z1 = Float64.(view(p1, :, 3))
+    x2 = Float64.(view(p2, :, 1)); y2 = Float64.(view(p2, :, 2)); z2 = Float64.(view(p2, :, 3))
+
+    bounds = [min(minimum(x1), minimum(x2)), max(maximum(x1), maximum(x2)),
+              min(minimum(y1), minimum(y2)), max(maximum(y1), maximum(y2)),
+              min(minimum(z1), minimum(z2)), max(maximum(z1), maximum(z2))]
+
+    Lx = bounds[2] - bounds[1]
+    Ly = bounds[4] - bounds[3]
+    Lz = bounds[6] - bounds[5]
+    mean_density = length(x2) / (Lx * Ly * Lz)
+
+    n1 = length(x1)
+    n2 = length(x2)
+
+    nt = threaded ? Threads.nthreads() : 1
+    gr_threads = [zeros(Float64, nbins) for _ in 1:nt]
+    shells_threads = [zeros(Float64, nbins) for _ in 1:nt]
+
+    p = (show_progress && !threaded) ? Progress(n1, dt=1.0) : nothing
+
+    if threaded && Threads.nthreads() > 1
+        Threads.@threads for central in 1:n1
+            tid = Threads.threadid()
+            local_gr = zeros(Float64, nbins)
+            local_shells = zeros(Float64, nbins)
+
+            for neigh in 1:n2
+                dx = x1[central] - x2[neigh]
+                dy = y1[central] - y2[neigh]
+                dz = z1[central] - z2[neigh]
+                d = sqrt(dx*dx + dy*dy + dz*dz)
+
+                lo, hi = _bin_range(r, d, dr)
+                @inbounds for k in lo:hi
+                    local_gr[k] += 1.0
+                end
+            end
+
+            local_box = [bounds[1] - x1[central], bounds[2] - x1[central],
+                         bounds[3] - y1[central], bounds[4] - y1[central],
+                         bounds[5] - z1[central], bounds[6] - z1[central]]
+
+            @inbounds for k in 1:nbins
+                sv = shell_volume(r[k] - dr/2, r[k] + dr/2, local_box)
+                if sv > 0.0
+                    local_gr[k] /= sv
+                    local_shells[k] += 1.0
+                end
+            end
+
+            local_gr ./= mean_density
+
+            @inbounds for k in 1:nbins
+                gr_threads[tid][k] += local_gr[k]
+                shells_threads[tid][k] += local_shells[k]
+            end
+        end
+    else
+        for central in 1:n1
+            local_gr = zeros(Float64, nbins)
+            local_shells = zeros(Float64, nbins)
+
+            for neigh in 1:n2
+                dx = x1[central] - x2[neigh]
+                dy = y1[central] - y2[neigh]
+                dz = z1[central] - z2[neigh]
+                d = sqrt(dx*dx + dy*dy + dz*dz)
+
+                lo, hi = _bin_range(r, d, dr)
+                @inbounds for k in lo:hi
+                    local_gr[k] += 1.0
+                end
+            end
+
+            local_box = [bounds[1] - x1[central], bounds[2] - x1[central],
+                         bounds[3] - y1[central], bounds[4] - y1[central],
+                         bounds[5] - z1[central], bounds[6] - z1[central]]
+
+            @inbounds for k in 1:nbins
+                sv = shell_volume(r[k] - dr/2, r[k] + dr/2, local_box)
+                if sv > 0.0
+                    local_gr[k] /= sv
+                    local_shells[k] += 1.0
+                end
+            end
+
+            local_gr ./= mean_density
+
+            @inbounds for k in 1:nbins
+                gr_threads[1][k] += local_gr[k]
+                shells_threads[1][k] += local_shells[k]
+            end
+
+            p === nothing || next!(p)
+        end
+        p === nothing || finish!(p)
+    end
+
+    global_gr = zeros(Float64, nbins)
+    nonempty = zeros(Float64, nbins)
+    @inbounds for t in 1:nt, k in 1:nbins
+        global_gr[k] += gr_threads[t][k]
+        nonempty[k] += shells_threads[t][k]
+    end
+
+    @inbounds for k in 1:nbins
+        if nonempty[k] > 0
+            global_gr[k] /= nonempty[k]
+        end
+    end
+
+    return global_gr
+end
+
+"""
+    process_particle_coords(particles, r, dr, out, sim_name)
+
+Convenience wrapper: compute g(r), save txt, save pdf.
+Returns `(gr, txt_path, pdf_path)`.
+"""
+function process_particle_coords(particles, r, dr, out, sim_name)
+    gr = rdf_analytic_norm(particles, r, dr)
+    txt = save_rdf_data(r, gr, dr, sim_name, out)
+    pdf = plot_rdf(r, gr, sim_name, out)
+    return gr, txt, pdf
+end

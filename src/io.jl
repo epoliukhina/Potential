@@ -1,50 +1,84 @@
-using Plots
+"""
+    read_particle_coords(path; factor=1.0)
 
-function readPartCoor(PartFile; factor=1.0)
-	# open the .txt file and read in all datalines
-	DataFile = open(PartFile, "r")
-	datalines = readlines(DataFile)
-	close(DataFile)
+Read a whitespace-delimited file with 3 columns (x y z) into an `N×3 Matrix{Float64}`.
+Skips empty lines and lines starting with `#`.
+Applies an optional scaling factor to all coordinates.
+"""
+function read_particle_coords(path::AbstractString; factor::Real = 1.0)
+    coords = Vector{NTuple{3, Float64}}()
 
-	# exctract all particle coordinates
-    len = size(datalines)[1]
-	Particles = Matrix{Float64}(undef, len, 3)
+    open(path, "r") do io
+        for (lineno, line) in enumerate(eachline(io))
+            s = strip(line)
+            isempty(s) && continue
+            startswith(s, "#") && continue
 
-	for (index, line) in enumerate(datalines)
-	   temp = split(line, " ")
-	   Part = [parse(Float64,temp[1]) parse(Float64,temp[2]) parse(Float64,temp[3])]
-       Particles[index,: ] = Part
+            parts = split(s)  # splits on any whitespace
+            if length(parts) < 3
+                error("Expected 3 columns at $path:$lineno, got: '$s'")
+            end
 
-	end
-    
-	return Particles .* factor
+            x = parse(Float64, parts[1])
+            y = parse(Float64, parts[2])
+            z = parse(Float64, parts[3])
+            push!(coords, (x, y, z))
+        end
+    end
+
+    n = length(coords)
+    particles = Matrix{Float64}(undef, n, 3)
+    @inbounds for i in 1:n
+        particles[i, 1] = coords[i][1]
+        particles[i, 2] = coords[i][2]
+        particles[i, 3] = coords[i][3]
+    end
+
+    return particles .* Float64(factor)
 end
 
-function plotRDF(r, Gr, SimuName, FilePath)
-    plot(r, Gr, color="green", label="", xlabel="r", ylabel="g(r)")
-    plot!(r, ones(length(r)), color="black", linestyle=:dash, linewidth=1, label="")
-    savefig(FilePath * SimuName * "_Gr.pdf")
-    return true
+# Accept either an output directory OR a file path and derive an output directory.
+_outdir(path::AbstractString) = isdir(path) ? path : dirname(path)
+
+"""
+    save_rdf_data(r, gr, dr, sim_name, out; source_path=nothing)
+
+Write RDF data to `<outdir>/<sim_name>_RDF.txt`.
+`out` may be a directory or a filepath (directory will be inferred).
+"""
+function save_rdf_data(r, gr, dr, sim_name::AbstractString, out::AbstractString; source_path=nothing)
+    outdir = _outdir(out)
+    mkpath(outdir)
+
+    outpath = joinpath(outdir, "$(sim_name)_RDF.txt")
+    open(outpath, "w") do io
+        write(io, "Radial Distribution Function for Experiment: ", sim_name, "\n")
+        if source_path !== nothing
+            write(io, "Original Path: ", string(source_path), "\n")
+        end
+        write(io, "Radial Bin Width: ", string(dr), "\n")
+        write(io, "# r [nm]\t g(r)\n")
+        @inbounds for k in eachindex(r)
+            write(io, string(r[k]), "\t", string(gr[k]), "\n")
+        end
+    end
+
+    return outpath
 end
 
-function saveRDFdata(rList, Gr, DeltaR, SimuName, FilePath)
-	# create a new file for the raw data
-	DataFile = open(FilePath * SimuName * "_RDF.txt", "w")
+"""
+    plot_rdf(r, gr, sim_name, out)
 
-	# write the header
-	write(DataFile, "Radial Distribution Function for Experiment: ", SimuName, "\n")
-	write(DataFile, "Original Path: ", FilePath, "\n")
-	write(DataFile, "Radial Bin Width: ", string(DeltaR), "\n")
-	write(DataFile, "Radial Distribution Function:\n")
-	write(DataFile, "#r [nm]\t g(r)\n")
+Save `<outdir>/<sim_name>_Gr.pdf`.
+"""
+function plot_rdf(r, gr, sim_name::AbstractString, out::AbstractString)
+    outdir = _outdir(out)
+    mkpath(outdir)
+    outpath = joinpath(outdir, "$(sim_name)_Gr.pdf")
 
-	# write the data
-	for k in eachindex(rList)
-	    write(DataFile, string(rList[k]), "\t", string(Gr[k]), "\n")
-	end
+    plot(r, gr, label="", xlabel="r", ylabel="g(r)")
+    plot!(r, ones(length(r)), linestyle=:dash, linewidth=1, label="")
+    savefig(outpath)
 
-	close(DataFile)
-
-	return true
+    return outpath
 end
-

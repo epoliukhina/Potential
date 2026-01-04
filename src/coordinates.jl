@@ -1,61 +1,53 @@
-#Functions for rotation and processing of coordinates
+"""
+    linear_fit(x, y) -> (m, c)
 
-# import Pkg;Pkg.add("Plotly")
-# particle_size = parse(Float64, size_str)
-# factor = parse(Float64, factor_str) 
-# data_matrix = factor .* readdlm(ParticleFileRaw)
-# x,y,z = data_matrix[:,1],data_matrix[:,2],data_matrix[:,3]
-# plotlyjs() 
-# Plots.scatter3d(x,y,z, markersize = particle_size/4)
-
-
-function linear_fit(points)
-    # construct the matrix A and the vector b
-    A = [points[:, 1] ones(size(points, 1))]
-    b = points[:, 2]
-
-    # use the least squares method to find the line parameters
-    m, c = A \ b
-
+Least-squares fit of `y ≈ m*x + c`.
+"""
+function linear_fit(x::AbstractVector, y::AbstractVector)
+    A = hcat(x, ones(length(x)))
+    m, c = A \ y
     return m, c
 end
 
-function rotate_particles(particles)
-    x,y,z = particles[:,1],particles[:,2],particles[:,3]
+# Backward-compatible helper: Nx2 matrix input
+linear_fit(points::AbstractMatrix) = linear_fit(view(points, :, 1), view(points, :, 2))
 
-    points_3d = hcat(x, y, z)
-    points = hcat(x, z)
-    kx, bx = linear_fit(points)
+"""
+    rotate_particles(particles; return_meta=false)
+
+Rotate an `N×3` coordinate set by estimating tilt from linear fits of (x,z) and (y,z).
+Returns rotated particles. If `return_meta=true`, also returns angles and rotation matrices.
+"""
+function rotate_particles(particles::AbstractMatrix{<:Real}; return_meta::Bool=false)
+    size(particles, 2) == 3 || error("rotate_particles expects an N×3 matrix")
+
+    x = Float64.(view(particles, :, 1))
+    y = Float64.(view(particles, :, 2))
+    z = Float64.(view(particles, :, 3))
+
+    kx, bx = linear_fit(x, z)
+    ky, by = linear_fit(y, z)
+
     phi_xz = atan(kx)
-
-    fx(x) = kx * x + bx
-
-    points = hcat(y, z)
-    ky, by = linear_fit(points)
     phi_yz = -atan(ky)
 
-    fy(y) = ky * y + by
+    Ux = [1.0 0.0 0.0;
+          0.0 cos(phi_yz) -sin(phi_yz);
+          0.0 sin(phi_yz)  cos(phi_yz)]
 
-    points = hcat(x,y)
-    kxy, bxy = linear_fit(points)
-    phi_xy= -atan(kxy)
+    Uy = [ cos(phi_xz) 0.0 sin(phi_xz);
+           0.0        1.0 0.0;
+          -sin(phi_xz) 0.0 cos(phi_xz)]
 
-    fxy(x) = kxy*x + bxy	
+    pts = hcat(x, y, z)
+    rotated = (Ux * Uy * pts')'
 
-    U_x = [1.0 0.0 0.0;
-            0.0 cos(phi_yz) -sin(phi_yz);
-            0.0 sin(phi_yz) cos(phi_yz)]
-
-    U_y = [cos(phi_xz) 0.0 sin(phi_xz);
-            0.0 1.0 0.0;
-            -sin(phi_xz) 0.0 cos(phi_xz)]
-
-    points_3d_new = (U_x * U_y * points_3d')'
-
-    # x_new = points_3d_new[:, 1]
-    # y_new = points_3d_new[:, 2]
-    # z_new = points_3d_new[:, 3]
-
-    return points_3d_new
+    if return_meta
+        return (particles = rotated,
+                phi_xz = phi_xz, phi_yz = phi_yz,
+                kx = kx, bx = bx, ky = ky, by = by,
+                Ux = Ux, Uy = Uy)
+    else
+        return rotated
+    end
 end
-
