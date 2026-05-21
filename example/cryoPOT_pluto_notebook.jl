@@ -1,22 +1,30 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.20.27
 
 using Markdown
 using InteractiveUtils
 
 # This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
 macro bind(def, element)
-    quote
+    #! format: off
+    return quote
         local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
         local el = $(esc(element))
         global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
         el
     end
+    #! format: on
 end
 
 # ╔═╡ 53f83c0f-2d6d-4aa9-8f77-84f0903ebebd
 begin
-    using Plots, ProgressMeter, PlutoUI, DelimitedFiles, Statistics, Pkg
+    import Pkg
+    Pkg.activate(joinpath(@__DIR__, ".."))
+    isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General")
+    Pkg.resolve()
+    Pkg.instantiate()
+
+    using Plots, ProgressMeter, PlutoUI, DelimitedFiles, Statistics
 
     const TITLE_FS = 11
     const GUIDE_FS = 11
@@ -27,6 +35,16 @@ begin
     const MS_RAW_2D = 1
     const MS_CUT_3D = 1
     const MS_CUT_2D = 1
+    const HAS_PLOTLY = all(pkg -> Base.find_package(pkg) !== nothing, ("PlotlyBase", "PlotlyKaleido"))
+    const DEFAULT_DATA_FILENAME = "BSA_20mgmL_Position_1_2.txt"
+    const DEFAULT_DATA_CANDIDATES = [
+        joinpath(@__DIR__, "..", "data", DEFAULT_DATA_FILENAME),
+        joinpath(@__DIR__, "data", DEFAULT_DATA_FILENAME),
+    ]
+    const DEFAULT_PARTICLE_FILE = begin
+        i = findfirst(isfile, DEFAULT_DATA_CANDIDATES)
+        i === nothing ? DEFAULT_DATA_CANDIDATES[end] : DEFAULT_DATA_CANDIDATES[i]
+    end
 
     # Use GR as the default backend (PDF saving works reliably).
     gr()
@@ -71,12 +89,6 @@ begin
     TableOfContents()
 end
 
-# ╔═╡ 8e7fa67f-85ae-4e66-aaa3-cb27df2aaa2d
-begin
-    Pkg.activate(joinpath(@__DIR__, ".."))
-    Pkg.instantiate()
-end
-
 # ╔═╡ 9fd66a2c-dc50-4dfe-bc64-76b8a57e051c
 using Potential
 
@@ -102,6 +114,9 @@ begin
 
     nothing
 end
+
+# ╔═╡ 8e7fa67f-85ae-4e66-aaa3-cb27df2aaa2d
+nothing
 
 # ╔═╡ dc937899-81ef-4326-8acd-94a09e8cee0d
 begin
@@ -137,7 +152,7 @@ Input file (txt/tsv/csv): $(@bind uploaded_raw FilePicker())
 # ╔═╡ 13cc1e0c-07f9-4d73-97a3-8cfcfa7d902a
 begin
     selected_str = if uploaded_raw === nothing
-        ".data/BSA_20mgmL_Position_1_2.txt"
+        DEFAULT_PARTICLE_FILE
     else
         # FilePicker returns a Dict-like object with "name"
         get(uploaded_raw, "name", "nothing")
@@ -165,7 +180,7 @@ Output directory (base): $(@bind outdir_base_raw TextField((80, 1), default=join
 
 # ╔═╡ 2cf2a7c5-0b7c-40df-a1f5-8d2cbd0ddc8d
 begin
-   default_path = joinpath(@__DIR__, "data", "BSA_20mgmL_Position_1_2.txt")
+   default_path = DEFAULT_PARTICLE_FILE
 
     initial_data_raw = if uploaded_raw === nothing
         Dict(
@@ -247,23 +262,7 @@ md"""
 # ╔═╡ 4d6714b1-2d73-4b4b-a901-1d2c83cfe63f
 begin
     function read_coords_any(path::AbstractString)
-        ext = lowercase(splitext(path)[2])
-        if ext == ".csv"
-            try
-                mat = readdlm(path, ',', Float64)
-                return mat[:, 1:3]
-            catch
-                mat, _ = readdlm(path, ','; header=true)
-                mat = Float64.(mat)
-                return mat[:, 1:3]
-            end
-        elseif ext == ".tsv" || ext == ".tab"
-            mat = Float64.(readdlm(path, '\t'))
-            return mat[:, 1:3]
-        else
-            mat = Float64.(readdlm(path))  # spaces + tabs
-            return mat[:, 1:3]
-        end
+        Potential.read_particle_coords(path)
     end
 
     factor = parse(Float64, basic_params[2])
@@ -276,7 +275,7 @@ begin
     # 3D: try Plotly for interactivity; fallback to GR; then restore GR
     local p
     try
-        plotly()
+        HAS_PLOTLY ? plotly() : gr()
         p = scatter3d(
             x, y, z;
             markersize=MS_RAW_3D,
@@ -341,7 +340,7 @@ end
 begin
     local p
     try
-        plotly()
+        HAS_PLOTLY ? plotly() : gr()
         p = scatter3d(
             x, y, z;
             markersize=MS_RAW_3D,
@@ -417,7 +416,7 @@ begin
 
     local p
     try
-        plotly()
+        HAS_PLOTLY ? plotly() : gr()
         p = scatter3d(
             x_rot_cut, y_rot_cut, z_rot_cut;
             markersize=MS_CUT_3D,

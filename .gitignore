@@ -1,6 +1,7 @@
 /Manifest.toml
 *pdf
 *.txt
+!example/data/*.txt
 
 docs/build/*
 docs/Manifest.toml

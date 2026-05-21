@@ -1,14 +1,15 @@
 using Documenter, Potential
 
 makedocs(;
-sitename="Potential",
-authors="Ekaterina Poliukhina",
-clean=true,
-modules=[Potential],
-checkdocs=:exports,
-pages = [
-    "Home" => "index.md",
-    "Theory" => "theory.md"
+    sitename="Potential",
+    authors="Ekaterina Poliukhina",
+    clean=true,
+    modules=[Potential],
+    checkdocs=:exports,
+    remotes=nothing,
+    pages=[
+        "Home" => "index.md",
+        "Theory" => "theory.md"
     ]
 )
 

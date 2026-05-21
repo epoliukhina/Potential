@@ -1,8 +1,9 @@
 """
     read_particle_coords(path; factor=1.0)
 
-Read a whitespace-delimited file with 3 columns (x y z) into an `N×3 Matrix{Float64}`.
-Skips empty lines and lines starting with `#`.
+Read a coordinate file with 3 columns (x y z) into an `N×3 Matrix{Float64}`.
+Accepts comma-separated, tab-separated, or whitespace-separated files.
+Skips empty lines, lines starting with `#`, and one non-numeric header row.
 Applies an optional scaling factor to all coordinates.
 """
 function read_particle_coords(path::AbstractString; factor::Real = 1.0)
@@ -14,14 +15,21 @@ function read_particle_coords(path::AbstractString; factor::Real = 1.0)
             isempty(s) && continue
             startswith(s, "#") && continue
 
-            parts = split(s)  # splits on any whitespace
+            parts = occursin(',', s) ? split(s, ',') : split(s)
+            parts = strip.(parts)
             if length(parts) < 3
                 error("Expected 3 columns at $path:$lineno, got: '$s'")
             end
 
-            x = parse(Float64, parts[1])
-            y = parse(Float64, parts[2])
-            z = parse(Float64, parts[3])
+            parsed = tryparse.(Float64, parts[1:3])
+            if any(isnothing, parsed)
+                if isempty(coords) && all(isnothing, parsed)
+                    continue
+                end
+                error("Expected numeric coordinates at $path:$lineno, got: '$s'")
+            end
+
+            x, y, z = Float64.(parsed)
             push!(coords, (x, y, z))
         end
     end

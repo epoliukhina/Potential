@@ -27,7 +27,10 @@ Outputs are written to a per-dataset folder inside the chosen base output direct
 
 ## Prerequisites
 
-**Julia** (recommended: Julia ≥ 1.9)
+**Julia** (recommended: Julia >= 1.9). On macOS with Homebrew:
+```bash
+brew install julia
+```
 
 ## Installation / Setup
 
@@ -36,16 +39,24 @@ Outputs are written to a per-dataset folder inside the chosen base output direct
 git clone https://github.com/epoliukhina/Potential.jl.git
 ```
 
-2. Start Julia and install Pluto (once):
+2. Enter the repository and install the package dependencies:
+```bash
+cd Potential.jl
+julia --project=. -e 'import Pkg; isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate()'
+```
+
+3. Install Pluto (once, in your default Julia environment):
 ```julia
 import Pkg
 Pkg.add("Pluto")
 ```
 
-3. Launch Pluto:
+4. Launch Pluto:
 ```julia
 using Pluto
 Pluto.run()
 ```
 
-4. Open the `cryoPOT_pluto_notebook.jl` notebook in Pluto. Follow the subsequent steps to load the file and perform analysis. 
+5. Open `example/cryoPOT_pluto_notebook.jl` in Pluto. The notebook activates this repository environment automatically. Follow the notebook steps to load a file and run analysis.
+
+If you have the BSA example dataset, put it at `data/BSA_20mgmL_Position_1_2.txt`; the notebook will use that file by default. If that file is absent, it falls back to the bundled small sample in `example/data/`.

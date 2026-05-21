@@ -76,6 +76,8 @@ end
     return lo, hi
 end
 
+_thread_buffer_count() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
+
 """
     rdf_analytic_norm(particles, r, dr; threaded=true, show_progress=false)
 
@@ -105,7 +107,7 @@ function rdf_analytic_norm(particles::AbstractMatrix{<:Real}, r, dr::Real;
     mean_density = length(x) / (Lx * Ly * Lz)
 
     n = length(x)
-    nt = threaded ? Threads.nthreads() : 1
+    nt = threaded ? _thread_buffer_count() : 1
     gr_threads = [zeros(Float64, nbins) for _ in 1:nt]
     shells_threads = [zeros(Float64, nbins) for _ in 1:nt]
 
@@ -148,9 +150,11 @@ function rdf_analytic_norm(particles::AbstractMatrix{<:Real}, r, dr::Real;
 
             local_gr ./= mean_density
 
+            thread_gr = gr_threads[tid]
+            thread_shells = shells_threads[tid]
             @inbounds for k in 1:nbins
-                gr_threads[tid][k] += local_gr[k]
-                shells_threads[tid][k] += local_shells[k]
+                thread_gr[k] += local_gr[k]
+                thread_shells[k] += local_shells[k]
             end
         end
     else
@@ -243,7 +247,7 @@ function rdf_analytic_norm(p1::AbstractMatrix{<:Real}, p2::AbstractMatrix{<:Real
     n1 = length(x1)
     n2 = length(x2)
 
-    nt = threaded ? Threads.nthreads() : 1
+    nt = threaded ? _thread_buffer_count() : 1
     gr_threads = [zeros(Float64, nbins) for _ in 1:nt]
     shells_threads = [zeros(Float64, nbins) for _ in 1:nt]
 
@@ -281,9 +285,11 @@ function rdf_analytic_norm(p1::AbstractMatrix{<:Real}, p2::AbstractMatrix{<:Real
 
             local_gr ./= mean_density
 
+            thread_gr = gr_threads[tid]
+            thread_shells = shells_threads[tid]
             @inbounds for k in 1:nbins
-                gr_threads[tid][k] += local_gr[k]
-                shells_threads[tid][k] += local_shells[k]
+                thread_gr[k] += local_gr[k]
+                thread_shells[k] += local_shells[k]
             end
         end
     else
