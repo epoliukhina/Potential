@@ -54,7 +54,7 @@ cd Potential
 
 From inside the `Potential` directory:
 ```bash
-julia --project=. -e 'import Pkg; isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate()'
+julia --project=. -e 'import Pkg; Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate()'
 ```
 This downloads and precompiles everything the package needs (~150 packages, a few minutes on first run).
 
