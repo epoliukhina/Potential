@@ -1,5 +1,6 @@
 using Potential
 using Test
+using Logging
 
 @testset "Potential.jl" begin
     @testset "read_particle_coords" begin
@@ -48,5 +49,19 @@ using Test
         else
             @test true
         end
+    end
+
+    @testset "Julia version support warning" begin
+        @test Potential._is_tested_julia_version(v"1.12.0")
+        @test Potential._is_tested_julia_version(v"1.12.99")
+        @test !Potential._is_tested_julia_version(v"1.11.0")
+        @test !Potential._is_tested_julia_version(v"1.13.0")
+
+        msg = Potential._untested_julia_warning_message(v"1.13.0")
+        @test occursin("Potential.jl has not been tested on Julia 1.13", msg)
+        @test occursin("tested on Julia 1.12", msg)
+
+        @test_logs (:warn, r"Potential\.jl has not been tested on Julia 1\.13") Potential._warn_if_untested_julia_version(v"1.13.0")
+        @test_logs min_level=Logging.Warn Potential._warn_if_untested_julia_version(v"1.12.0")
     end
 end
