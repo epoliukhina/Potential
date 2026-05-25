@@ -2,6 +2,7 @@ using LinearAlgebra
 using ProgressMeter
 using DelimitedFiles
 using Plots
+using PlotlyBase
 
 # Safe sinc: sin(x)/x with small-x handling (MATLAB sinc_function.m behavior)
 sinc_safe(x::Real) = abs(x) < 1e-5 ? 1.0 : sin(x) / x
@@ -85,7 +86,7 @@ function save_structure_factor(q, Sq, outpath::AbstractString)
 end
 
 function plot_structure_factor(q, Sq; xlim_tuple=nothing, ylim_tuple=nothing, title_str="Structure factor S(q)")
-    gr()
+    plotly()
     p = plot(q, Sq;
         label="",
         xlabel="q [Å⁻¹]",
